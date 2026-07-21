@@ -22,3 +22,7 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+ocr-system/__pycache__
+ocr-system/test.txt
+ocr-system/documents.db
+
