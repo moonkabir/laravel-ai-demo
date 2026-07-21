@@ -1,22 +1,33 @@
 <?php
+// app/Http/Controllers/ChatController.php
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Session;
 use App\Models\Conversation;
 use App\Services\AIService;
 use DeepSeek\DeepSeekClient;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use LucianoTonet\GroqPHP\Groq;
 
 class ChatController extends Controller
 {
+    protected $pythonApiUrl;
 
+    public function __construct()
+    {
+        $this->pythonApiUrl = env('PYTHON_API_URL', 'http://localhost:8001');
+    }
+
+    /**
+     * Show the chat interface
+     */
     public function index()
     {
         return view('chat.index');
     }
-
 
     // public function chat(Request $request, AIService $ai)
     // public function chat(Request $request)
@@ -38,6 +49,9 @@ class ChatController extends Controller
     // }
 
 
+    /**
+     * Send a chat message
+     */
     public function chat(Request $request)
     {
         $request->validate([
@@ -45,62 +59,68 @@ class ChatController extends Controller
         ]);
 
         $sessionId = session()->getId();
+        $message = $request->message;
 
         try {
-            // Get or create conversation
-            $conversation = Conversation::firstOrCreate(
-                ['session_id' => $sessionId],
-                ['messages' => '[]']
-            );
+            // Get conversation history from session
+            $history = session('chat_history', []);
 
-            // ✅ FIX: Decode JSON string to array
-            $messages = json_decode($conversation->messages, true);
+            // Send to Python service
+            $response = Http::post("{$this->pythonApiUrl}/chat", [
+                'message' => $message,
+                'session_id' => $sessionId,
+                'conversation_history' => $history
+            ]);
 
-            // If it's null or empty, initialize as empty array
-            if (!is_array($messages) || empty($messages)) {
-                $messages = [];
+            if ($response->successful()) {
+                $data = $response->json();
 
-                // Add system prompt for new conversations
-                $messages[] = [
-                    'role' => 'system',
-                    'content' => 'You are a helpful assistant. Remember the user\'s name and details throughout the conversation.'
-                ];
+                // Update session history
+                $history[] = ['role' => 'user', 'content' => $message];
+                $history[] = ['role' => 'assistant', 'content' => $data['reply']];
+                session(['chat_history' => $history]);
+
+                return response()->json([
+                    'success' => true,
+                    'reply' => $data['reply'],
+                    'sources' => $data['sources'] ?? []
+                ]);
+            } else {
+                throw new \Exception($response->body() ?? 'Python service error');
             }
 
-            // Add user's new message
-            $messages[] = ['role' => 'user', 'content' => $request->message];
-
-            // Make API call
-            $groq = new Groq(env('GROQ_API_KEY'));
-
-            $response = $groq->chat()->completions()->create([
-                'model' => 'llama-3.1-8b-instant',
-                'messages' => $messages,
-                'temperature' => 0.7,
-            ]);
-
-            $reply = $response['choices'][0]['message']['content'];
-
-            // Add AI's response to history
-            $messages[] = ['role' => 'assistant', 'content' => $reply];
-
-            // ✅ FIX: Encode back to JSON string for storage
-            $conversation->messages = json_encode($messages);
-            $conversation->save();
-
-            return response()->json([
-                'success' => true,
-                'reply' => $reply
-            ]);
-
         } catch (\Exception $e) {
-            Log::error('Chat Error: ' . $e->getMessage());
+            Log::error('Chat error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => 'Failed to get response: ' . $e->getMessage()
             ], 500);
         }
     }
 
+    /**
+     * Clear chat history
+     */
+    public function clear()
+    {
+        session()->forget('chat_history');
 
+        return response()->json([
+            'success' => true,
+            'message' => 'Chat history cleared'
+        ]);
+    }
+
+    /**
+     * Get chat history
+     */
+    public function history()
+    {
+        $history = session('chat_history', []);
+
+        return response()->json([
+            'success' => true,
+            'history' => $history
+        ]);
+    }
 }

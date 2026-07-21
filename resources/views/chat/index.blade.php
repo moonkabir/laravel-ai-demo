@@ -1,3 +1,4 @@
+{{-- resources/views/chat/index.blade.php --}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,9 +13,7 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .message-animate {
-            animation: fadeIn 0.3s ease-out;
-        }
+        .message-animate { animation: fadeIn 0.3s ease-out; }
         .typing-indicator span {
             display: inline-block;
             width: 8px;
@@ -36,19 +35,17 @@
             overflow-y: auto;
             scroll-behavior: smooth;
         }
-        .chat-container::-webkit-scrollbar {
-            width: 6px;
-        }
-        .chat-container::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 3px;
-        }
-        .chat-container::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 3px;
-        }
-        .chat-container::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+        .chat-container::-webkit-scrollbar { width: 6px; }
+        .chat-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+        .chat-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .chat-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .source-card {
+            background: #f0f7ff;
+            border-left: 3px solid #3b82f6;
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            font-size: 12px;
         }
     </style>
 </head>
@@ -62,21 +59,26 @@
                 </div>
                 <div>
                     <h1 class="text-lg font-semibold text-gray-800">AI Assistant</h1>
-                    <p class="text-xs text-gray-500">Powered by Groq • Llama 3.1</p>
+                    <p class="text-xs text-gray-500">Powered by RAG • Document-Aware</p>
                 </div>
             </div>
-            <button onclick="clearChat()" class="text-gray-400 hover:text-red-500 transition">
-                <i class="fas fa-trash-alt"></i>
-            </button>
+            <div class="flex space-x-2">
+                <a href="{{ route('documents.index') }}"
+                   class="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition">
+                    <i class="fas fa-folder-open"></i> Documents
+                </a>
+                <button onclick="clearChat()" class="text-gray-400 hover:text-red-500 transition">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
         </div>
 
         <!-- Chat Messages -->
         <div id="chatContainer" class="chat-container bg-gray-50 border-x border-gray-200 p-4 space-y-4">
-            <!-- Welcome Message -->
             <div class="text-center text-gray-400 text-sm py-8">
                 <i class="fas fa-comment-dots text-3xl block mb-3 text-gray-300"></i>
                 <p>Start a conversation with the AI assistant</p>
-                <p class="text-xs mt-1">Ask me anything!</p>
+                <p class="text-xs mt-1">I can answer questions based on your uploaded documents</p>
             </div>
         </div>
 
@@ -85,33 +87,19 @@
             <form id="chatForm" class="flex space-x-3">
                 @csrf
                 <div class="flex-1 relative">
-                    <input
-                        type="text"
-                        id="messageInput"
-                        name="message"
-                        placeholder="Type your message here..."
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition pr-12"
-                        autocomplete="off"
-                        required
-                    >
-                    <button
-                        type="submit"
-                        id="sendButton"
-                        class="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
+                    <input type="text" id="messageInput" name="message"
+                           placeholder="Ask me anything about your documents..."
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition pr-12"
+                           autocomplete="off" required>
+                    <button type="submit" id="sendButton"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-600 transition disabled:opacity-50">
                         <i class="fas fa-paper-plane text-lg"></i>
                     </button>
                 </div>
-                <button
-                    type="button"
-                    onclick="clearChat()"
-                    class="px-4 py-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-600"
-                >
-                    <i class="fas fa-eraser"></i>
-                </button>
             </form>
-            <div class="mt-2 text-xs text-gray-400 text-center">
-                <span id="charCount">0</span> / 1000 characters
+            <div class="mt-2 flex justify-between text-xs text-gray-400">
+                <span id="charCount">0</span>
+                <span>Press Enter to send</span>
             </div>
         </div>
     </div>
@@ -135,21 +123,15 @@
             const message = messageInput.value.trim();
             if (!message) return;
 
-            // Add user message to chat
             addMessage('user', message);
-
-            // Clear input
             messageInput.value = '';
             charCount.textContent = '0';
 
-            // Show typing indicator
             const typingId = showTypingIndicator();
-
-            // Disable send button
             sendButton.disabled = true;
 
             try {
-                const response = await fetch('/chat', {
+                const response = await fetch('{{ route("chat.send") }}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -159,26 +141,22 @@
                 });
 
                 const data = await response.json();
-
-                // Remove typing indicator
                 removeTypingIndicator(typingId);
 
                 if (data.success) {
-                    addMessage('assistant', data.reply);
+                    addMessage('assistant', data.reply, data.sources);
                 } else {
-                    addMessage('error', data.error || 'Something went wrong. Please try again.');
+                    addMessage('error', data.error || 'Something went wrong.');
                 }
             } catch (error) {
                 removeTypingIndicator(typingId);
                 addMessage('error', 'Network error. Please check your connection.');
-                console.error('Chat error:', error);
             } finally {
                 sendButton.disabled = false;
             }
         });
 
-        // Add message to chat
-        function addMessage(role, content) {
+        function addMessage(role, content, sources = null) {
             const welcomeDiv = chatContainer.querySelector('.text-center');
             if (welcomeDiv) welcomeDiv.remove();
 
@@ -195,39 +173,42 @@
                               '<i class="fas fa-robot text-white text-sm"></i>';
 
             const contentDiv = document.createElement('div');
-            contentDiv.className = `max-w-[80%] px-4 py-3 rounded-2xl ${
+            contentDiv.className = `max-w-[85%] px-4 py-3 rounded-2xl ${
                 role === 'user' ? 'bg-purple-500 text-white rounded-tr-none' :
                 role === 'error' ? 'bg-red-100 text-red-800 border border-red-200 rounded-tl-none' :
                 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'
             }`;
             contentDiv.innerHTML = formatMessage(content);
 
+            // Add sources if available
+            if (sources && sources.length > 0) {
+                const sourcesDiv = document.createElement('div');
+                sourcesDiv.className = 'mt-2 pt-2 border-t border-gray-200';
+                sourcesDiv.innerHTML = `
+                    <p class="text-xs text-gray-500 font-medium">📄 Sources:</p>
+                    ${sources.map(s => `
+                        <div class="source-card">
+                            <strong>${s.title}</strong>: ${s.content}
+                        </div>
+                    `).join('')}
+                `;
+                contentDiv.appendChild(sourcesDiv);
+            }
+
             messageDiv.appendChild(avatar);
             messageDiv.appendChild(contentDiv);
             chatContainer.appendChild(messageDiv);
-
             scrollToBottom();
         }
 
-        // Format message (basic markdown-like formatting)
         function formatMessage(text) {
-            // Handle code blocks
             text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
                 return `<pre class="bg-gray-800 text-white p-3 rounded-lg overflow-x-auto my-2 text-sm"><code>${escapeHtml(code.trim())}</code></pre>`;
             });
-
-            // Handle inline code
             text = text.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm">$1</code>');
-
-            // Handle bold
             text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-            // Handle italic
             text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-            // Handle line breaks
             text = text.replace(/\n/g, '<br>');
-
             return text;
         }
 
@@ -237,7 +218,6 @@
             return div.innerHTML;
         }
 
-        // Typing indicator
         function showTypingIndicator() {
             const id = 'typing-' + Date.now();
             const div = document.createElement('div');
@@ -249,9 +229,7 @@
                 </div>
                 <div class="bg-white border border-gray-200 px-4 py-3 rounded-2xl rounded-tl-none">
                     <div class="typing-indicator flex space-x-1">
-                        <span></span>
-                        <span></span>
-                        <span></span>
+                        <span></span><span></span><span></span>
                     </div>
                 </div>
             `;
@@ -265,12 +243,11 @@
             if (element) element.remove();
         }
 
-        // Clear chat
         async function clearChat() {
             if (!confirm('Clear all messages?')) return;
 
             try {
-                const response = await fetch('/chat/clear', {
+                const response = await fetch('{{ route("chat.clear") }}', {
                     method: 'DELETE',
                     headers: {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
@@ -282,7 +259,7 @@
                     chatContainer.innerHTML = `
                         <div class="text-center text-gray-400 text-sm py-8">
                             <i class="fas fa-comment-dots text-3xl block mb-3 text-gray-300"></i>
-                            <p>Chat history cleared</p>
+                            <p>Chat cleared</p>
                             <p class="text-xs mt-1">Start a new conversation</p>
                         </div>
                     `;
@@ -292,14 +269,10 @@
             }
         }
 
-        // Scroll to bottom
         function scrollToBottom() {
-            setTimeout(() => {
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-            }, 100);
+            setTimeout(() => chatContainer.scrollTop = chatContainer.scrollHeight, 100);
         }
 
-        // Enter key to submit
         messageInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -307,7 +280,6 @@
             }
         });
 
-        // Initial scroll to bottom
         scrollToBottom();
     </script>
 </body>
