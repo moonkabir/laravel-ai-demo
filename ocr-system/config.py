@@ -11,6 +11,12 @@ class Config:
     # Database
     DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./documents.db')
 
+    # Qdrant Configuration
+    QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
+    QDRANT_API_KEY = os.getenv('QDRANT_API_KEY', '')
+    QDRANT_COLLECTION_NAME = os.getenv('QDRANT_COLLECTION_NAME', 'documents')
+    QDRANT_VECTOR_SIZE = int(os.getenv('QDRANT_VECTOR_SIZE', 384))
+
     # Server
     HOST = os.getenv('HOST', '0.0.0.0')
     PORT = int(os.getenv('PORT', 8001))

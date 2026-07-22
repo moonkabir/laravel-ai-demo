@@ -13,6 +13,7 @@ from models import init_db, SessionLocal, Document, DocumentChunk, Conversation
 from document_processor import DocumentProcessor
 from rag_engine import RAGEngine
 from utils import truncate_text, format_bytes
+from server_utils import get_available_port
 
 # Setup logging
 logging.basicConfig(
@@ -373,11 +374,17 @@ async def delete_document(
 # ============ RUN ============
 if __name__ == "__main__":
     import uvicorn
+    port = config.PORT
+    try:
+        port = get_available_port(port)
+    except OSError:
+        port = 8002
+
     print("\n" + "="*60)
     print("🚀 OCR & RAG Service Running")
     print("="*60)
     print(f"📁 Database: {config.DATABASE_URL}")
     print(f"🔑 Groq API: {'✓ Set' if config.GROQ_API_KEY else '✗ Not Set'}")
-    print(f"🌐 Server: http://{config.HOST}:{config.PORT}")
+    print(f"🌐 Server: http://{config.HOST}:{port}")
     print("="*60 + "\n")
-    uvicorn.run(app, host=config.HOST, port=config.PORT)
+    uvicorn.run(app, host=config.HOST, port=port)
